@@ -15,7 +15,7 @@ CCC counts and calculates:
 
 In a sorted and visualized manner. CCC is designed as an IDA tab.
 
-![Image of Yaktocat](https://github.com/aleeamini/Function-Complexity-Plugin/blob/master/idacomplexity.PNG)
+![Image of Yaktocat](https://github.com/aleeamini/CycloComplexityCalc/blob/master/idacomplexity.PNG)
 
 
 # Installation
