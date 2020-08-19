@@ -1,8 +1,9 @@
 from __future__ import print_function
 from collections import defaultdict
-import idaapi
-import idautils
-import idc
+from sets import Set
+from idc import *
+from idaapi import *
+from idautils import *
 from sets import Set
 
 class Graph: 
@@ -149,7 +150,7 @@ class CyclomaticComplexityChoose(Choose2):
             return False
 
     def PopulateItems(self):
-        userfuncs=getUserFuncs()
+        userfuncs=self.getUserFuncs()
         
         loopsdict={}
         tarjansloopsdict={}
@@ -160,42 +161,42 @@ class CyclomaticComplexityChoose(Choose2):
         pointerdict={}
         
         for func in userfuncs:
-            loops=loopsInFunc(func)
+            loops=self.loopsInFunc(func)
             loopsdict.update({func:len(loops)})
-            bbs=bbDetection(func)
+            bbs=self.bbDetection(func)
             bbsdict.update({func:bbs.size})
-            switchs=switchDetection(func)
+            switchs=self.switchDetection(func)
             switchdict.update({func:switchs})
-            preds=getBlockPredecessor(func)
+            preds=self.getBlockPredecessor(func)
             predsdict.update({func:preds})
-            pointerdict.update({func:pointerCounter(func)})
-            tarjanloops=tarjansLoops(func)
+            pointerdict.update({func:self.pointerCounter(func)})
+            tarjanloops=self.tarjansLoops(func)
             tarjansloopsdict.update({func:tarjanloops})
-            cyclo=cyclomatic_complexity(func)
+            cyclo=self.cyclomatic_complexity(func)
             cyclodict.update({func:cyclo})
-            self.items.append(["%08x" % func,"%s" %userfuncs[func], "%d" % int(bbsdict[func]),"%d" % len(tarjansloopsdict[func]),"%d" % loopsdict[func],"%d" %len(switchdict[func]),
-                "%d" %len(predsdict[func]),"%d" %pointerdict[func],"%d" %cyclodict[func],"%s" % ((GetFunctionFlags(func) & FUNC_LIB) != 0)])
+            self.items.append(["%08x" % func,"%s" %userfuncs[func], "%d" % bbsdict[func],"%d" % len(tarjansloopsdict[func]),"%d" % loopsdict[func],"%d" %len(switchdict[func]),
+                "%d" %predsdict[func][1],"%d" %pointerdict[func],"%d" %cyclodict[func],"%s" % ((GetFunctionFlags(func) & FUNC_LIB) != 0)])
             
             self.items=sorted(self.items, key=lambda student: int(student[2]),reverse=True) 
             
             
-    def getFuncs():
+    def getFuncs(self):
         ea = SegByBase(SegByName(".text"))
         allfuncs_dict={}
         for functionAddr in Functions(ea):
             allfuncs_dict.update({functionAddr:GetFunctionName(functionAddr)})
         return allfuncs_dict
         
-    def getUserFuncs():
+    def getUserFuncs(self):
         userfunc_dict={}
-        allfuncs=getFuncs()
+        allfuncs=self.getFuncs()
         for func in allfuncs:
             flags=idc.GetFunctionAttr(func,idc.FUNCATTR_FLAGS)
             if not(flags & FUNC_LIB) and not(flags & FUNC_THUNK):# exclude lib functions 
                 userfunc_dict.update({func:allfuncs[func]})
         return userfunc_dict
 
-    def loopsInFunc(funcea):
+    def loopsInFunc(self,funcea):
         loops = []
         func_end = FindFuncEnd(funcea)
         for item in FuncItems(funcea):
@@ -206,13 +207,13 @@ class CyclomaticComplexityChoose(Choose2):
                             loops.append((hex(xref.frm), hex(xref.to)))
         return loops
 
-    def bbDetection(funcea):
+    def bbDetection(self,funcea):
         f=idaapi.get_func(funcea)
         bblist=[]
         bblist=idaapi.FlowChart(f)
         return bblist
 
-    def getBlockPredecessor(funcea):
+    def getBlockPredecessor(self,funcea):
         max=-1
         blockaddr=0
         i=0
@@ -228,7 +229,7 @@ class CyclomaticComplexityChoose(Choose2):
 
         return [blockaddr,max]
 
-    def switchDetection(funcea):
+    def switchDetection(self,funcea):
         switchDict={}
         funcEndAddr=idc.GetFunctionAttr(funcea,idc.FUNCATTR_END)
         for head_ea in Heads(funcea, funcEndAddr):
@@ -240,7 +241,7 @@ class CyclomaticComplexityChoose(Choose2):
                     switchDict.update({loc:element_num})
         return switchDict
 
-    def pointerCounter2(funcea):
+    def pointerCounter2(self,funcea):
         switchDict={}
         c=0
         funcEndAddr=idc.GetFunctionAttr(funcea,idc.FUNCATTR_END)
@@ -251,7 +252,7 @@ class CyclomaticComplexityChoose(Choose2):
                 print (hex(head_ea))    
         #return switchDict
 
-    def pointerCounter(funcea):### this function has been written by myself
+    def pointerCounter(self,funcea):### this function has been written by myself
         switchDict={}
         c=0
         funcEndAddr=idc.GetFunctionAttr(funcea,idc.FUNCATTR_END)
@@ -268,7 +269,7 @@ class CyclomaticComplexityChoose(Choose2):
         return c
 
         
-    def tarjansLoops(fva):
+    def tarjansLoops(self,fva):
         function = idaapi.get_func(fva)
         flowchart = idaapi.FlowChart(function)
         g=Graph(flowchart.size)
@@ -277,7 +278,7 @@ class CyclomaticComplexityChoose(Choose2):
                 g.addEdge(bb.id,succ.id)
         return g.SCC()  
 
-    def cyclomatic_complexity(function_ea):
+    def cyclomatic_complexity(self,function_ea):
         
         f_start = function_ea
         f_end = idc.FindFuncEnd(function_ea)
@@ -308,22 +309,22 @@ def show_choose():
     choose.show()
 
 class CyclomaticComplexity_t(plugin_t):
-    flags = PLUGIN_UNL
-    comment = "Complexity"
-    help = ""
-    wanted_name = "Complexity"
-    wanted_hotkey = ""
+	flags = PLUGIN_UNL
+	comment = "Complexity"
+	help = ""
+	wanted_name = "Complexity"
+	wanted_hotkey = ""
 
-    def init(self):
-        self.icon_id = 0
-        return PLUGIN_OK
+	def init(self):
+		self.icon_id = 0
+		return PLUGIN_OK
 
-    def run(self, arg=0):
-        show_choose()
+	def run(self, arg=0):
+		show_choose()
 
-    def term(self):
-        pass
-
+	def term(self):
+		pass
+        
 def PLUGIN_ENTRY():
     return CyclomaticComplexity_t()
 
