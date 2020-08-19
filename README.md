@@ -1,4 +1,4 @@
-# CycloComplexityCalc(CCC Plugin):
+# CycloComplexityCalc (CCC Plugin)
 
 CycloComplexityCalc is an IDAPython module designed to extract some useful characteristics from binary functions and then calculate the complexity of each function. 
 It does that in order to help our fuzzers dig into their targets precisely. 
@@ -18,10 +18,10 @@ In a sorted and visualized manner. CCC is designed as an IDA tab.
 ![Image of Yaktocat](https://github.com/aleeamini/Function-Complexity-Plugin/blob/master/idacomplexity.PNG)
 
 
-# Installation:
+# Installation
 
 First open up your binary file in IDA, then from File -> Script file, choose the CCC script. 
 You can also try this with Alt+F7.
 
-# Notes:
+# Notes
 CCC is tested and works perfectly on IDA Pro 7.0.
