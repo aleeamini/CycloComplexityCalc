@@ -1,10 +1,10 @@
 from __future__ import print_function
 from collections import defaultdict
-from sets import Set
 from idc import *
 from idaapi import *
 from idautils import *
-from sets import Set
+from ida_bytes import is_code, is_flow
+Set = set
 
 class Graph: 
 
@@ -66,19 +66,19 @@ class Graph:
             
 
 #printFuncs(userfunc_dict)
-class CyclomaticComplexityChoose(Choose2):
+class CyclomaticComplexityChoose(Choose):
     def __init__(self, title):
-        Choose2.__init__(self, title, [ 
-                ["Address", 8 | Choose2.CHCOL_HEX], 
-                ["Name", 30 | Choose2.CHCOL_PLAIN],
-                ["BasicBlocks", 6 | Choose2.CHCOL_DEC],
-                ["TarjanLoops", 6 |Choose2.CHCOL_DEC],
-                ["Loops", 6 |Choose2.CHCOL_DEC],
-                ["SwitchCases", 6 | Choose2.CHCOL_DEC],
-                ["MaxPreds", 6 | Choose2.CHCOL_DEC],
-                ["Pointers", 6 | Choose2.CHCOL_DEC],
-                ["Cyclomatic_Complexity", 6 | Choose2.CHCOL_DEC],
-                ["Library func", 6 | Choose2.CHCOL_PLAIN] ])
+        Choose.__init__(self, title, [ 
+                ["Address", 8 | Choose.CHCOL_HEX], 
+                ["Name", 30 | Choose.CHCOL_PLAIN],
+                ["BasicBlocks", 6 | Choose.CHCOL_DEC],
+                ["TarjanLoops", 6 |Choose.CHCOL_DEC],
+                ["Loops", 6 |Choose.CHCOL_DEC],
+                ["SwitchCases", 6 | Choose.CHCOL_DEC],
+                ["MaxPreds", 6 | Choose.CHCOL_DEC],
+                ["Pointers", 6 | Choose.CHCOL_DEC],
+                ["Cyclomatic_Complexity", 6 | Choose.CHCOL_DEC],
+                ["Library func", 6 | Choose.CHCOL_PLAIN] ])
 
         self.title	= title
         self.colors = (0x0000ff,0x0074ff, 0x00e8ff, 0x00ff00)
@@ -108,18 +108,18 @@ class CyclomaticComplexityChoose(Choose2):
         green=0x00ff00
         maxbbs=int(self.items[0][2])
         bbs = int(self.items[n][2])
-        mid=maxbbs/2
+        mid=int(maxbbs/2)
         if(n==0):
             color=red
         elif(bbs>mid):
-            tmpgreen=(((bbs*255 )/mid))
+            tmpgreen=int(((bbs*255 )/mid))
             if(tmpgreen>255):
                 tmpgreen=255-(tmpgreen-255)
-            color=red|(tmpgreen<<8)
+            color=red|(int(tmpgreen)<<8)
             #print("%06x" %tmpgreen)
         elif(bbs<mid):
-            tmpred=(bbs*255)/mid
-            color=green|(tmpred)
+            tmpred=int((bbs*255)/mid)
+            color=int(green)|(tmpred)
             #print("%06x" %tmpred)
         
         return [color, 0]
@@ -175,35 +175,36 @@ class CyclomaticComplexityChoose(Choose2):
             cyclo=self.cyclomatic_complexity(func)
             cyclodict.update({func:cyclo})
             self.items.append(["%08x" % func,"%s" %userfuncs[func], "%d" % bbsdict[func],"%d" % len(tarjansloopsdict[func]),"%d" % loopsdict[func],"%d" %len(switchdict[func]),
-                "%d" %predsdict[func][1],"%d" %pointerdict[func],"%d" %cyclodict[func],"%s" % ((GetFunctionFlags(func) & FUNC_LIB) != 0)])
+                "%d" %predsdict[func][1],"%d" %pointerdict[func],"%d" %cyclodict[func],"%s" % ((get_func_attr(func, FUNCATTR_FLAGS) & FUNC_LIB) != 0)])
             
             self.items=sorted(self.items, key=lambda student: int(student[2]),reverse=True) 
             
             
     def getFuncs(self):
-        ea = SegByBase(SegByName(".text"))
+        ea = get_segm_by_sel(selector_by_name(".text"))
         allfuncs_dict={}
-        for functionAddr in Functions(ea):
-            allfuncs_dict.update({functionAddr:GetFunctionName(functionAddr)})
+        #for functionAddr in Functions(ea):
+        for functionAddr in Functions():
+            allfuncs_dict.update({functionAddr: get_func_name(functionAddr)})
         return allfuncs_dict
         
     def getUserFuncs(self):
         userfunc_dict={}
         allfuncs=self.getFuncs()
         for func in allfuncs:
-            flags=idc.GetFunctionAttr(func,idc.FUNCATTR_FLAGS)
+            flags=idc.get_func_attr(func,idc.FUNCATTR_FLAGS)
             if not(flags & FUNC_LIB) and not(flags & FUNC_THUNK):# exclude lib functions 
                 userfunc_dict.update({func:allfuncs[func]})
         return userfunc_dict
 
     def loopsInFunc(self,funcea):
         loops = []
-        func_end = FindFuncEnd(funcea)
+        func_end = find_func_end(funcea)
         for item in FuncItems(funcea):
             for xref in XrefsTo(item, 0):
                 if xref.type not in [1,21]:
                     if funcea <= xref.to <= xref.frm <= func_end:
-                        if GetMnem(xref.frm) not in ['call', 'retn']:
+                        if print_insn_mnem(xref.frm) not in ['call', 'retn']:
                             loops.append((hex(xref.frm), hex(xref.to)))
         return loops
 
@@ -225,15 +226,15 @@ class CyclomaticComplexityChoose(Choose2):
                 i=i+1
             if(i > max):
                 max=i
-                blockaddr=block.startEA
+                blockaddr=block.start_ea
 
         return [blockaddr,max]
 
     def switchDetection(self,funcea):
         switchDict={}
-        funcEndAddr=idc.GetFunctionAttr(funcea,idc.FUNCATTR_END)
+        funcEndAddr=idc.get_func_attr(funcea,idc.FUNCATTR_END)
         for head_ea in Heads(funcea, funcEndAddr):
-            if idc.isCode(idc.GetFlags(head_ea)):
+            if idc.is_code(idc.get_full_flags(head_ea)):
                 switch_info = idaapi.get_switch_info(head_ea)
                 if (switch_info and switch_info.jumps != 0):
                     loc = switch_info.jumps
@@ -244,10 +245,10 @@ class CyclomaticComplexityChoose(Choose2):
     def pointerCounter2(self,funcea):
         switchDict={}
         c=0
-        funcEndAddr=idc.GetFunctionAttr(funcea,idc.FUNCATTR_END)
+        funcEndAddr=idc.get_func_attr(funcea,idc.FUNCATTR_END)
         heads=Heads(funcea, funcEndAddr)
         for head_ea in heads:
-            if idc.isOff0(idc.GetFlags(head_ea)):
+            if idc.isOff0(idc.get_full_flags(head_ea)):
                 c=c+1
                 print (hex(head_ea))    
         #return switchDict
@@ -255,10 +256,10 @@ class CyclomaticComplexityChoose(Choose2):
     def pointerCounter(self,funcea):### this function has been written by myself
         switchDict={}
         c=0
-        funcEndAddr=idc.GetFunctionAttr(funcea,idc.FUNCATTR_END)
+        funcEndAddr=idc.get_func_attr(funcea,idc.FUNCATTR_END)
         heads=Heads(funcea, funcEndAddr)
         for head_ea in heads:
-            if idc.isCode(idc.GetFlags(head_ea)):
+            if idc.is_code(idc.get_full_flags(head_ea)):
                 if (idc.print_insn_mnem(head_ea) == "lea"):
                     if (idc.get_operand_type(head_ea, 1) == idaapi.o_displ):
                         nexthead=idc.next_head(head_ea)
@@ -281,24 +282,25 @@ class CyclomaticComplexityChoose(Choose2):
     def cyclomatic_complexity(self,function_ea):
         
         f_start = function_ea
-        f_end = idc.FindFuncEnd(function_ea)
+        f_end = idc.find_func_end(function_ea)
         edges = Set()
         boundaries = Set((f_start,))
 
         for head in Heads(f_start, f_end):
-            if isCode(idc.GetFlags(head)):
+            if is_code(idc.get_full_flags(head)):
                 refs = CodeRefsFrom(head, 0)
                 refs = Set(filter(lambda x: x>=f_start and x<=f_end, refs))
                 
                 if refs:
-                    next_head = NextHead(head, f_end)
-                    if isFlow(GetFlags(next_head)):
-                        refs.add(next_head)
-                    boundaries.union_update(refs)
+                    head_next = next_head(head, f_end)
+                    if is_flow(get_full_flags(head_next)):
+                        refs.add(head_next)
+                    boundaries.update(refs)
+                    #boundaries.union_update(refs)
 
                     for r in refs:
-                        if isFlow(GetFlags(r)):
-                            edges.add((PrevHead(r, f_start), r))
+                        if is_flow(get_full_flags(r)):
+                            edges.add((prev_head(r, f_start), r))
                         edges.add((head, r))
 
         return len(edges) - len(boundaries) + 2    
